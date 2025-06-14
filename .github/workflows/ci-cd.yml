@@ -1,65 +1,35 @@
-name: C/C++ CI/CD
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ main ]
+  release:
+    types: [ published ]
 
 jobs:
-  build-and-test:
+  build-test-deploy:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        build-type: [Debug, Release]
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential cmake
-    
-    - name: Configure CMake
-      run: |
-        cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build-type }}
-    
-    - name: Build
-      run: |
-        cmake --build build --config ${{ matrix.build-type }}
-    
-    - name: Run tests
-      run: |
-        cd build
-        ctest --output-on-failure
-    
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: ${{ matrix.build-type }}-binaries
-        path: build/
-        if-no-files-found: error
 
-  deploy:
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    
     steps:
-    - name: Download artifacts
-      uses: actions/download-artifact@v3
-      with:
-        name: Release-binaries
-        path: release-artifacts
-    
-    - name: List artifacts (for demo)
-      run: ls -R release-artifacts
-      
-    # Add your deployment steps here (e.g., upload to releases)
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
-      if: success()
-      with:
-        files: release-artifacts/**
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build project
+        run: npm run build
+
+      - name: Deploy (optional)
+        if: github.ref == 'refs/heads/main'
+        run: echo "Deploy script goes here"
