@@ -3,7 +3,7 @@
 #include <vector>
 #include <algorithm>
 
-// Simple function to demonstrate functionality
+// Simple function to demonstrate functionalityu
 int add(int a, int b) {
     return a + b;
 }
