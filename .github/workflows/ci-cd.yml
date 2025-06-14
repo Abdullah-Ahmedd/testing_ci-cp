@@ -1,34 +1,17 @@
-name: C++ CI
+name: Super-Linter
 
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+on: [push, pull_request]
 
 jobs:
-  build:
-
+  lint:
     runs-on: ubuntu-latest
-
     steps:
-    - name: ✅ Checkout code from TIC_TAC_TOE
+    - name: Checkout Code
       uses: actions/checkout@v3
 
-    - name: 🛠 Install g++
-      run: sudo apt update && sudo apt install -y g++
-
-    - name: 📦 Compile the project
-      run: |
-        mkdir -p build
-        g++ tictactoe.cpp -o build/tictactoe.out
-
-    - name: 🧪 Run basic test (simulate a flow)
-      run: |
-        echo "Running program..."
-        ./build/tictactoe.out <<EOF
-        2
-        testuser
-        1234
-        4
-        EOF
+    - name: Run Super Linter
+      uses: github/super-linter@v6
+      env:
+        VALIDATE_CPP: true
+        DEFAULT_BRANCH: main
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
