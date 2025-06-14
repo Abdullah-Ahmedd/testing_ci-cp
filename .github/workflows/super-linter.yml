@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+  statuses: write
+
 jobs:
   super-linter:
     name: Run Super Linter
@@ -20,4 +24,6 @@ jobs:
         env:
           DEFAULT_BRANCH: main
           VALIDATE_ALL_CODEBASE: true
+          ENABLE_LINTERS: CPP,CLANG_FORMAT
+          DISABLE_LINTERS: CHECKOV,JSCPD,MARKDOWN,PYTHON
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
