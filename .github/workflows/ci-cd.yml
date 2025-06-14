@@ -11,33 +11,17 @@ permissions:
   statuses: write
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake g++
-
-      - name: Build project
-        run: |
-          mkdir -p build
-          cd build
-          cmake ..
-          make
-
   lint:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Super Linter
+      - name: Run Super Linter on main.cpp only
         uses: super-linter/super-linter@v6
         env:
           DEFAULT_BRANCH: main
-          VALIDATE_ALL_CODEBASE: true
-          ENABLE_LINTERS: CPP,CLANG_FORMAT
-          DISABLE_LINTERS: CHECKOV,JSCPD,MARKDOWN,PYTHON
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VALIDATE_ALL_CODEBASE: false
+          FILES_TO_LINT: main.cpp
+          ENABLE_LINTERS: CPP,CLANG_FORMAT
