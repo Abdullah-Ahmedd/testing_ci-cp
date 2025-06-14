@@ -29,6 +29,13 @@ jobs:
         echo "Header files (.h/.hpp):"
         find . -name "*.h" -o -name "*.hpp" -type f | head -20
         
+        # Check for SQLite files that should be excluded
+        if find . -name "shell.c" -o -name "sqlite3.c" | grep -q .; then
+          echo "⚠️  Found SQLite source files - these will be excluded from compilation"
+          echo "SQLite files found:"
+          find . -name "shell.c" -o -name "sqlite3.c"
+        fi
+        
     - name: Find entry point file
       run: |
         # Look for main.cpp first (preferred)
