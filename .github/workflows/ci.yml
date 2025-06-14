@@ -29,24 +29,41 @@ jobs:
         echo "Header files (.h/.hpp):"
         find . -name "*.h" -o -name "*.hpp" -type f | head -20
         
-    - name: Check for main.cpp
+    - name: Find entry point file
       run: |
+        # Look for main.cpp first (preferred)
         if [ -f "main.cpp" ]; then
-          echo "✅ Found main.cpp - will use as entry point"
+          echo "✅ Found main.cpp - using as entry point"
+          echo "ENTRY_FILE=main.cpp" >> $GITHUB_ENV
         else
-          echo "❌ No main.cpp found in root directory"
-          echo "Available .cpp files:"
-          find . -name "*.cpp" -type f
-          exit 1
+          # Look for any .cpp file with main() function
+          echo "🔍 No main.cpp found, searching for entry point..."
+          ENTRY_FILE=""
+          
+          for file in *.cpp; do
+            if [ -f "$file" ] && grep -q "int main(" "$file"; then
+              echo "✅ Found entry point in: $file"
+              echo "ENTRY_FILE=$file" >> $GITHUB_ENV
+              ENTRY_FILE="$file"
+              break
+            fi
+          done
+          
+          if [ -z "$ENTRY_FILE" ]; then
+            echo "❌ No entry point found (no file with 'int main()' function)"
+            echo "Available .cpp files:"
+            find . -name "*.cpp" -type f
+            exit 1
+          fi
         fi
         
     - name: Compile all source files
       run: |
-        echo "🔨 Compiling project..."
+        echo "🔨 Compiling project with entry point: $ENTRY_FILE"
         
-        # Find all .cpp and .c files
+        # Find all .cpp and .c files, excluding SQLite shell files
         CPP_FILES=$(find . -name "*.cpp" -type f)
-        C_FILES=$(find . -name "*.c" -type f)
+        C_FILES=$(find . -name "*.c" -type f | grep -v "shell\.c" | grep -v "sqlite3\.c")
         
         # Create compilation command
         COMPILE_CMD="g++ -std=c++17 -Wall -Wextra -Werror -o main"
@@ -57,7 +74,7 @@ jobs:
           COMPILE_CMD="$COMPILE_CMD $file"
         done
         
-        # Add all C files
+        # Add all C files (excluding SQLite shell files)
         for file in $C_FILES; do
           echo "Adding C file: $file"
           COMPILE_CMD="$COMPILE_CMD $file"
@@ -65,6 +82,12 @@ jobs:
         
         # Add common libraries (add more as needed)
         COMPILE_CMD="$COMPILE_CMD -lsqlite3 -lpthread -lm"
+        
+        # If no source files found, just compile the entry point
+        if [ -z "$CPP_FILES" ] && [ -z "$C_FILES" ]; then
+          echo "⚠️  No additional source files found, compiling only entry point"
+          COMPILE_CMD="g++ -std=c++17 -Wall -Wextra -Werror -o main $ENTRY_FILE -lsqlite3 -lpthread -lm"
+        fi
         
         echo "📋 Full compilation command:"
         echo "$COMPILE_CMD"
