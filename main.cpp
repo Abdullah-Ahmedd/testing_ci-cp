@@ -1,11 +1,11 @@
 #include <iostream>
 
+// Adds two integers.
 int Add(int a, int b) {
   return a + b;
 }
 
 int main() {
-  int result = Add(3, 4);
-  std::cout << "Result: " << result << std::endl;
+  std::cout << "Result: " << Add(2, 3) << std::endl;
   return 0;
 }
