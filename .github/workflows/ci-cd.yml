@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: C/C++ CI/CD Pipeline
 
 on:
   push:
@@ -13,23 +13,22 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-
       - name: Install dependencies
-        run: npm install
-
-      - name: Run tests
-        run: npm test
+        run: sudo apt update && sudo apt install -y build-essential
 
       - name: Build project
-        run: npm run build
+        run: |
+          mkdir -p build
+          g++ -Wall -Wextra -O2 -o build/app src/*.cpp
+
+      - name: Run tests (optional)
+        run: |
+          echo "Add test commands here if available"
+          # Example: ./build/app < input.txt
 
       - name: Deploy (optional)
         if: github.ref == 'refs/heads/main'
-        run: echo "Deploy script goes here"
+        run: echo "Deployment step goes here"
