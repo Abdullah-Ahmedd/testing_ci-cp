@@ -17,31 +17,110 @@ jobs:
     - name: Install C++ compiler and build tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential g++
+        sudo apt-get install -y build-essential g++ libsqlite3-dev sqlite3
         
-    - name: Compile main.cpp
+    - name: List all C/C++ files
       run: |
-        echo "Compiling main.cpp..."
-        g++ -std=c++17 -Wall -Wextra -Werror -o main main.cpp
+        echo "📁 Scanning project structure..."
+        echo "C++ Source files (.cpp):"
+        find . -name "*.cpp" -type f | head -20
+        echo "C Source files (.c):"
+        find . -name "*.c" -type f | head -20
+        echo "Header files (.h/.hpp):"
+        find . -name "*.h" -o -name "*.hpp" -type f | head -20
+        
+    - name: Check for main.cpp
+      run: |
+        if [ -f "main.cpp" ]; then
+          echo "✅ Found main.cpp - will use as entry point"
+        else
+          echo "❌ No main.cpp found in root directory"
+          echo "Available .cpp files:"
+          find . -name "*.cpp" -type f
+          exit 1
+        fi
+        
+    - name: Compile all source files
+      run: |
+        echo "🔨 Compiling project..."
+        
+        # Find all .cpp and .c files
+        CPP_FILES=$(find . -name "*.cpp" -type f)
+        C_FILES=$(find . -name "*.c" -type f)
+        
+        # Create compilation command
+        COMPILE_CMD="g++ -std=c++17 -Wall -Wextra -Werror -o main"
+        
+        # Add all C++ files
+        for file in $CPP_FILES; do
+          echo "Adding C++ file: $file"
+          COMPILE_CMD="$COMPILE_CMD $file"
+        done
+        
+        # Add all C files
+        for file in $C_FILES; do
+          echo "Adding C file: $file"
+          COMPILE_CMD="$COMPILE_CMD $file"
+        done
+        
+        # Add common libraries (add more as needed)
+        COMPILE_CMD="$COMPILE_CMD -lsqlite3 -lpthread -lm"
+        
+        echo "📋 Full compilation command:"
+        echo "$COMPILE_CMD"
+        echo ""
+        
+        # Execute compilation
+        eval $COMPILE_CMD
         
     - name: Verify compilation success
       run: |
         if [ -f "./main" ]; then
           echo "✅ Compilation successful - executable 'main' created"
           ls -la main
+          echo "📊 Executable size: $(du -h main | cut -f1)"
         else
           echo "❌ Compilation failed - executable not found"
           exit 1
         fi
         
+    - name: Check for syntax/header issues
+      run: |
+        echo "🔍 Checking for common issues..."
+        
+        # Check for missing semicolons (basic check)
+        if grep -n "std::cout.*<<.*[^;]$" *.cpp *.c 2>/dev/null; then
+          echo "⚠️  Potential missing semicolons found (check above lines)"
+        fi
+        
+        # Check for basic header includes
+        echo "📋 Header includes found:"
+        grep -n "^#include" *.cpp *.c *.h *.hpp 2>/dev/null | head -10 || echo "No includes found in current directory"
+        
     - name: Run the compiled program
       run: |
-        echo "Executing the program..."
+        echo "🚀 Executing the program..."
         timeout 30s ./main || {
           EXIT_CODE=$?
           if [ $EXIT_CODE -eq 124 ]; then
             echo "⚠️  Program timed out after 30 seconds"
+          elif [ $EXIT_CODE -eq 0 ]; then
+            echo "✅ Program completed successfully"
           else
-            echo "Program exited with code: $EXIT_CODE"
+            echo "⚠️  Program exited with code: $EXIT_CODE"
           fi
         }
+        
+    - name: Project summary
+      run: |
+        echo "📊 Project Summary:"
+        echo "Total .cpp files: $(find . -name "*.cpp" -type f | wc -l)"
+        echo "Total .c files: $(find . -name "*.c" -type f | wc -l)"  
+        echo "Total .h files: $(find . -name "*.h" -type f | wc -l)"
+        echo "Total .hpp files: $(find . -name "*.hpp" -type f | wc -l)"
+        
+        if [ -f "./main" ]; then
+          echo "✅ Build Status: SUCCESS"
+        else
+          echo "❌ Build Status: FAILED"
+        fi
