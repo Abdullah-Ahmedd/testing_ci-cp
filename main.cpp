@@ -3,8 +3,8 @@
 /**
  * @brief Adds two integers and returns the result.
  *
- * @param a First integerr
- * @param b Second integerr
+ * @param a First integer
+ * @param b Second integer
  * @return Sum of a and b
  */
 int Add(int a, int b) {
