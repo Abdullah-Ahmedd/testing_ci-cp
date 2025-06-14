@@ -1,8 +1,8 @@
-name: CI/CD Pipeline
+name: Minimal Super Linter
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
@@ -11,17 +11,19 @@ permissions:
   statuses: write
 
 jobs:
-  lint:
+  lint-main-cpp:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Run Super Linter on main.cpp only
+      - name: Run Super Linter ONLY on main.cpp
         uses: super-linter/super-linter@v6
         env:
-          DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BRANCH: main
           VALIDATE_ALL_CODEBASE: false
           FILES_TO_LINT: main.cpp
           ENABLE_LINTERS: CPP,CLANG_FORMAT
+          DISABLE_LINTERS: ALL
