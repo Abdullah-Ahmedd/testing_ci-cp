@@ -1,4 +1,4 @@
-name: Minimal Super Linter
+name: TIC_TAC_TOE CI/CD Pipeline
 
 on:
   push:
@@ -6,24 +6,79 @@ on:
   pull_request:
     branches: [ main ]
 
-permissions:
-  contents: read
-  statuses: write
+env:
+  CXX: g++
+  BUILD_TYPE: Release
 
 jobs:
-  lint-main-cpp:
+  lint-and-format:
+    name: Lint and Format
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+    - name: Checkout Repository
+      uses: actions/checkout@v4
 
-      - name: Run Super Linter ONLY on main.cpp
-        uses: super-linter/super-linter@v6
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEFAULT_BRANCH: main
-          VALIDATE_ALL_CODEBASE: false
-          FILES_TO_LINT: main.cpp
-          ENABLE_LINTERS: CPP,CLANG_FORMAT
-          DISABLE_LINTERS: ALL
+    - name: Install clang tools
+      run: |
+        sudo apt update
+        sudo apt install -y clang-format clang-tidy
+
+    - name: Check formatting with clang-format
+      run: |
+        FILES=$(find . -name "*.cpp" -o -name "*.hpp" -o -name "*.h")
+        echo "$FILES" | xargs clang-format --dry-run --Werror || {
+          echo "❌ Formatting issues found. Please run clang-format." && exit 1
+        }
+
+    - name: Run clang-tidy (if config exists)
+      run: |
+        if [ -f ".clang-tidy" ]; then
+          FILES=$(find . -name "*.cpp")
+          echo "$FILES" | xargs clang-tidy --warnings-as-errors=* || {
+            echo "❌ clang-tidy issues found." && exit 1
+          }
+        else
+          echo "No .clang-tidy file found, skipping."
+        fi
+
+  build-and-test:
+    name: Build and Run
+    runs-on: ubuntu-latest
+    needs: lint-and-format
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Install build tools
+      run: sudo apt update && sudo apt install -y g++ tree
+
+    - name: List source files
+      run: |
+        echo "Source files:"
+        find . -name "*.cpp" -o -name "*.h" -o -name "*.hpp" | tree
+
+    - name: Compile main.cpp
+      run: |
+        mkdir -p build
+        if [ -f "main.cpp" ]; then
+          g++ -std=c++17 -Wall -Wextra -O2 main.cpp -o build/tictactoe
+        else
+          echo "❌ main.cpp not found!" && exit 1
+        fi
+
+    - name: Run Executable
+      run: |
+        if [ -f "build/tictactoe" ]; then
+          ./build/tictactoe --help || echo "ℹ️ Program does not support --help. Skipping."
+        else
+          echo "❌ Executable not found!" && exit 1
+        fi
+
+    - name: Upload Build Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: tictactoe-build
+        path: build/tictactoe
+        retention-days: 30
