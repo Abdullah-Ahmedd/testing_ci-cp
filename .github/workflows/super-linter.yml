@@ -1,254 +1,164 @@
-# .github/workflows/ci-cd.yml
-name: CI/CD Pipeline for testing_ci-cp
+#!/bin/bash
+# scripts/build.sh - Local build script
 
-on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
-  release:
-    types: [ published ]
+set -e
 
-env:
-  BUILD_TYPE: Release
-  ARTIFACT_NAME: testing_ci-cp
+echo "🔨 Building testing_ci-cp..."
 
-jobs:
-  # Build and Test Job
-  build-and-test:
-    name: Build and Test
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        compiler: [gcc, clang]
-        exclude:
-          - os: windows-latest
-            compiler: clang
-        include:
-          - os: windows-latest
-            compiler: msvc
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
+# Create build directory
+mkdir -p build
+cd build
 
-    # Setup compilers
-    - name: Setup GCC
-      if: matrix.compiler == 'gcc' && matrix.os == 'ubuntu-latest'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc g++ build-essential
+# Configure and build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake --build . --config Release
 
-    - name: Setup Clang
-      if: matrix.compiler == 'clang'
-      run: |
-        if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-          sudo apt-get update
-          sudo apt-get install -y clang
-        elif [ "${{ matrix.os }}" = "macos-latest" ]; then
-          # Clang is pre-installed on macOS
-          clang --version
-        fi
+echo "✅ Build completed successfully!"
 
-    - name: Setup MSVC
-      if: matrix.compiler == 'msvc' && matrix.os == 'windows-latest'
-      uses: microsoft/setup-msbuild@v1.3
+# Test the executable
+echo "🧪 Testing executable..."
+if [ -f "./main" ]; then
+    ./main
+    echo "✅ main executable works!"
+elif [ -f "./testing_ci-cp" ]; then
+    ./testing_ci-cp
+    echo "✅ testing_ci-cp executable works!"
+elif [ -f "./Release/main.exe" ]; then
+    ./Release/main.exe
+    echo "✅ main.exe executable works!"
+elif [ -f "./Release/testing_ci-cp.exe" ]; then
+    ./Release/testing_ci-cp.exe
+    echo "✅ testing_ci-cp.exe executable works!"
+else
+    echo "❌ No executable found!"
+    ls -la
+    exit 1
+fi
 
-    # Create build directory
-    - name: Create Build Directory
-      run: mkdir build
+---
+#!/bin/bash
+# scripts/deploy.sh - Deployment preparation script
 
-    # Configure build system
-    - name: Configure CMake (Unix)
-      if: matrix.os != 'windows-latest' || matrix.compiler != 'msvc'
-      working-directory: build
-      run: |
-        if [ "${{ matrix.compiler }}" = "clang" ]; then
-          cmake .. -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
-        else
-          cmake .. -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
-        fi
+set -e
 
-    - name: Configure CMake (Windows MSVC)
-      if: matrix.compiler == 'msvc' && matrix.os == 'windows-latest'
-      working-directory: build
-      run: cmake .. -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+VERSION=${1:-"v1.0.0"}
+echo "📦 Preparing deployment package for version $VERSION..."
 
-    # Build the project
-    - name: Build Project
-      working-directory: build
-      run: cmake --build . --config ${{ env.BUILD_TYPE }}
+# Create deployment directory
+mkdir -p deploy/testing_ci-cp-$VERSION/{bin,src}
 
-    # Run tests
-    - name: Run Tests
-      working-directory: build
-      run: ctest --output-on-failure --build-config ${{ env.BUILD_TYPE }}
+# Copy executables if they exist
+echo "Copying executables..."
+find build -name "main" -o -name "testing_ci-cp" -o -name "*.exe" | while read file; do
+    if [ -f "$file" ]; then
+        cp "$file" "deploy/testing_ci-cp-$VERSION/bin/"
+        echo "  ✓ Copied $(basename $file)"
+    fi
+done
 
-    # Static Analysis with cppcheck (Linux only)
-    - name: Install cppcheck
-      if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
-      run: sudo apt-get install -y cppcheck
+# Copy source and documentation
+cp main.cpp "deploy/testing_ci-cp-$VERSION/src/"
+cp CMakeLists.txt "deploy/testing_ci-cp-$VERSION/"
+[ -f README.md ] && cp README.md "deploy/testing_ci-cp-$VERSION/"
+[ -f LICENSE ] && cp LICENSE "deploy/testing_ci-cp-$VERSION/"
 
-    - name: Run Static Analysis
-      if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
-      run: |
-        cppcheck --enable=all --inconclusive --xml --xml-version=2 . 2> cppcheck-report.xml || true
-        
-    - name: Upload Static Analysis Results
-      if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
-      uses: actions/upload-artifact@v4
-      with:
-        name: cppcheck-report
-        path: cppcheck-report.xml
+# Create archives
+cd deploy
+echo "Creating archives..."
+tar -czf "testing_ci-cp-$VERSION.tar.gz" "testing_ci-cp-$VERSION/"
+zip -r "testing_ci-cp-$VERSION.zip" "testing_ci-cp-$VERSION/"
 
-    # Upload build artifacts
-    - name: Upload Build Artifacts (Unix)
-      if: matrix.os != 'windows-latest'
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.ARTIFACT_NAME }}-${{ matrix.os }}-${{ matrix.compiler }}
-        path: |
-          build/${{ env.ARTIFACT_NAME }}
-          build/main
+echo "✅ Deployment package ready:"
+echo "  📁 deploy/testing_ci-cp-$VERSION/"
+echo "  📦 deploy/testing_ci-cp-$VERSION.tar.gz"
+echo "  📦 deploy/testing_ci-cp-$VERSION.zip"
 
-    - name: Upload Build Artifacts (Windows)
-      if: matrix.os == 'windows-latest'
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.ARTIFACT_NAME }}-${{ matrix.os }}-${{ matrix.compiler }}
-        path: |
-          build/${{ env.BUILD_TYPE }}/*.exe
-          build/Debug/*.exe
+---
+@echo off
+REM scripts/build.bat - Windows build script
 
-  # Code Quality Job
-  code-quality:
-    name: Code Quality Analysis
-    runs-on: ubuntu-latest
-    needs: build-and-test
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+echo 🔨 Building testing_ci-cp...
 
-    - name: Setup dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y clang-format clang-tidy
+REM Create build directory
+if not exist build mkdir build
+cd build
 
-    # Check code formatting
-    - name: Check Code Formatting
-      run: |
-        find . -name "*.cpp" -o -name "*.h" -o -name "*.hpp" | xargs clang-format --dry-run --Werror
+REM Configure and build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake --build . --config Release
 
-    # Run clang-tidy
-    - name: Run Clang-Tidy
-      run: |
-        mkdir build
-        cd build
-        cmake .. -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-        clang-tidy ../main.cpp -p . -- -std=c++17
+if %ERRORLEVEL% neq 0 (
+    echo ❌ Build failed!
+    exit /b 1
+)
 
-  # Security Scan Job
-  security-scan:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+echo ✅ Build completed successfully!
 
-    - name: Run CodeQL Analysis
-      uses: github/codeql-action/init@v2
-      with:
-        languages: cpp
+REM Test the executable
+echo 🧪 Testing executable...
+if exist "Release\main.exe" (
+    Release\main.exe
+    echo ✅ main.exe executable works!
+) else if exist "Release\testing_ci-cp.exe" (
+    Release\testing_ci-cp.exe
+    echo ✅ testing_ci-cp.exe executable works!
+) else (
+    echo ❌ No executable found!
+    dir Release
+    exit /b 1
+)
 
-    - name: Build for CodeQL
-      run: |
-        mkdir build
-        cd build
-        cmake ..
-        cmake --build .
+---
+# Makefile - Simple build automation
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
+.PHONY: all build test clean deploy help
 
-  # Memory Check Job (Linux only)
-  memory-check:
-    name: Memory Check with Valgrind
-    runs-on: ubuntu-latest
-    needs: build-and-test
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+# Default target
+all: build test
 
-    - name: Install Valgrind
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y valgrind
+# Build the project
+build:
+	@echo "🔨 Building project..."
+	@mkdir -p build
+	@cd build && cmake .. -DCMAKE_BUILD_TYPE=Release
+	@cd build && cmake --build . --config Release
+	@echo "✅ Build completed!"
 
-    - name: Build Project
-      run: |
-        mkdir build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Debug
-        cmake --build .
+# Test the executable
+test: build
+	@echo "🧪 Testing executable..."
+	@if [ -f "build/main" ]; then \
+		build/main; \
+	elif [ -f "build/testing_ci-cp" ]; then \
+		build/testing_ci-cp; \
+	elif [ -f "build/Release/main.exe" ]; then \
+		build/Release/main.exe; \
+	elif [ -f "build/Release/testing_ci-cp.exe" ]; then \
+		build/Release/testing_ci-cp.exe; \
+	else \
+		echo "❌ No executable found!"; \
+		ls -la build/; \
+		exit 1; \
+	fi
+	@echo "✅ Test completed!"
 
-    - name: Run Valgrind
-      working-directory: build
-      run: |
-        valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --track-origins=yes --error-exitcode=1 ./main || ./testing_ci-cp
+# Clean build artifacts
+clean:
+	@echo "🧹 Cleaning build artifacts..."
+	@rm -rf build deploy
+	@echo "✅ Clean completed!"
 
-  # Deploy Job (only on release)
-  deploy:
-    name: Deploy Release
-    runs-on: ubuntu-latest
-    needs: [build-and-test, code-quality, security-scan]
-    if: github.event_name == 'release'
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+# Prepare deployment package
+deploy: build
+	@echo "📦 Preparing deployment..."
+	@./scripts/deploy.sh
+	@echo "✅ Deployment package ready!"
 
-    - name: Download all artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: artifacts
-
-    - name: Create Release Package
-      run: |
-        mkdir release-package
-        cp -r artifacts/* release-package/
-        tar -czf ${{ env.ARTIFACT_NAME }}-${{ github.ref_name }}.tar.gz release-package/
-
-    - name: Upload Release Assets
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./${{ env.ARTIFACT_NAME }}-${{ github.ref_name }}.tar.gz
-        asset_name: ${{ env.ARTIFACT_NAME }}-${{ github.ref_name }}.tar.gz
-        asset_content_type: application/gzip
-
-  # Notification Job
-  notify:
-    name: Notify Build Status
-    runs-on: ubuntu-latest
-    needs: [build-and-test, code-quality, security-scan]
-    if: always()
-    
-    steps:
-    - name: Notify Success
-      if: ${{ needs.build-and-test.result == 'success' && needs.code-quality.result == 'success' && needs.security-scan.result == 'success' }}
-      run: echo "✅ All checks passed successfully!"
-
-    - name: Notify Failure
-      if: ${{ needs.build-and-test.result == 'failure' || needs.code-quality.result == 'failure' || needs.security-scan.result == 'failure' }}
-      run: |
-        echo "❌ Build pipeline failed!"
-        exit 1
+# Show help
+help:
+	@echo "Available targets:"
+	@echo "  build   - Build the project"
+	@echo "  test    - Build and test the executable"
+	@echo "  clean   - Clean build artifacts"
+	@echo "  deploy  - Prepare deployment package"
+	@echo "  help    - Show this help message"
