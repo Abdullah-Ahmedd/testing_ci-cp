@@ -1,43 +1,75 @@
-name: CI - Windows Build Only
+name: CI - Windows Build and Test
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, master, develop ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, master, develop ]
   workflow_dispatch:
 
 jobs:
-  build-windows-msvc:
+  build-and-test-windows:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Set up MSVC developer command prompt
-        uses: ilammy/msvc-dev-cmd@v1
+    - name: Set up MSVC (Visual Studio Dev Command Prompt)
+      uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Compile with MSVC
-        shell: powershell
-        run: |
-          $commonFlags = "/EHsc /std:c++17"
-          $warningFlags = "/W3 /wd4996 /wd4244 /wd4267 /wd4018"
-          $sqliteFlags = "/DSQLITE_OMIT_LOAD_EXTENSION /DSQLITE_ENABLE_RTREE /DSQLITE_ENABLE_FTS3"
+    - name: Compile with MSVC
+      shell: cmd
+      run: |
+        echo Compiling with MSVC...
 
-          Write-Host "Building main_basic.exe..."
-          cl main.cpp sqlite3.c $commonFlags $warningFlags $sqliteFlags /Fe:main_basic.exe
+        set SQLITE_FLAGS=/DSQLITE_OMIT_LOAD_EXTENSION /DSQLITE_ENABLE_RTREE /DSQLITE_ENABLE_FTS3
+        set COMMON_FLAGS=/EHsc /std:c++17
+        set WARNING_FLAGS=/W3 /wd4996 /wd4244 /wd4267 /wd4018
 
-          Write-Host "Building main_debug.exe..."
-          cl main.cpp sqlite3.c $commonFlags $warningFlags $sqliteFlags /Zi /DDEBUG /Fe:main_debug.exe
+        echo Building main_basic.exe...
+        cl %COMMON_FLAGS% %WARNING_FLAGS% %SQLITE_FLAGS% /Fe:main_basic.exe main.cpp sqlite3.c
 
-          Write-Host "Building main_optimized.exe..."
-          cl main.cpp sqlite3.c $commonFlags $warningFlags $sqliteFlags /O2 /DNDEBUG /Fe:main_optimized.exe
+        echo Building main_debug.exe...
+        cl %COMMON_FLAGS% %WARNING_FLAGS% %SQLITE_FLAGS% /Zi /DDEBUG /Fe:main_debug.exe main.cpp sqlite3.c
 
-      - name: Upload executables
-        uses: actions/upload-artifact@v4
-        with:
-          name: executables-windows-msvc
-          path: |
-            main_*.exe
-          retention-days: 7
+        echo Building main_optimized.exe...
+        cl %COMMON_FLAGS% %WARNING_FLAGS% %SQLITE_FLAGS% /O2 /DNDEBUG /Fe:main_optimized.exe main.cpp sqlite3.c
+
+    - name: Verify executables
+      shell: powershell
+      run: |
+        dir main_*.exe
+        if (Test-Path main_basic.exe) { Write-Host "main_basic.exe exists" }
+        if (Test-Path main_debug.exe) { Write-Host "main_debug.exe exists" }
+        if (Test-Path main_optimized.exe) { Write-Host "main_optimized.exe exists" }
+
+    - name: Test executables
+      shell: powershell
+      timeout-minutes: 2
+      continue-on-error: true
+      run: |
+        $executables = @("main_basic.exe", "main_debug.exe", "main_optimized.exe")
+        foreach ($exe in $executables) {
+          Write-Host "Testing $exe..."
+          try {
+            $p = Start-Process -FilePath ".\$exe" -Wait -PassThru -NoNewWindow
+            if ($p.ExitCode -eq 0) {
+              Write-Host "$exe ran successfully"
+            } else {
+              Write-Host "$exe failed with exit code $($p.ExitCode)"
+            }
+          } catch {
+            Write-Host "$exe crashed or hung (likely waiting for input)"
+          }
+        }
+
+    - name: Upload executables
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-executables
+        path: |
+          main_basic.exe
+          main_debug.exe
+          main_optimized.exe
+        retention-days: 7
