@@ -1,26 +1,26 @@
-name: CD - Deploy Windows Binary to Release
+name: CD - Release Windows Executable
 
 on:
   release:
-    types: [ published ]
+    types: [published]
 
 jobs:
-  deploy:
+  build-and-upload:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout code
+    - name: Checkout Code
       uses: actions/checkout@v4
 
     - name: Set up MSVC
       uses: ilammy/msvc-dev-cmd@v1
 
-    - name: Build executable
+    - name: Build main.exe
       shell: cmd
       run: |
-        cl /EHsc /std:c++17 /W3 /Fe:main.exe main.cpp sqlite3.c
+        cl /EHsc /std:c++17 main.cpp sqlite3.c /Fe:main.exe
 
-    - name: Upload to GitHub Releases
+    - name: Upload main.exe to Release
       uses: softprops/action-gh-release@v2
       with:
         files: main.exe
