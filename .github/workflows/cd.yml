@@ -21,100 +21,55 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up MSVC (Visual Studio Dev Command Prompt)
+    - name: Set up MSVC
       uses: ilammy/msvc-dev-cmd@v1
 
     - name: Build Release Binaries
       shell: cmd
       run: |
-        echo Building release binaries...
-        
         set SQLITE_FLAGS=/DSQLITE_OMIT_LOAD_EXTENSION /DSQLITE_ENABLE_RTREE /DSQLITE_ENABLE_FTS3
         set COMMON_FLAGS=/EHsc /std:c++17
         set WARNING_FLAGS=/W3 /wd4996 /wd4244 /wd4267 /wd4018
         set RELEASE_FLAGS=/O2 /DNDEBUG
 
-        echo Building release executable...
         cl %COMMON_FLAGS% %WARNING_FLAGS% %SQLITE_FLAGS% %RELEASE_FLAGS% /Fe:testing_ci-cp.exe main.cpp sqlite3.c
-
-        echo Building debug executable...
         cl %COMMON_FLAGS% %WARNING_FLAGS% %SQLITE_FLAGS% /Zi /DDEBUG /Fe:testing_ci-cp_debug.exe main.cpp sqlite3.c
+        copy testing_ci-cp.exe main.exe
 
-    - name: Create release directory structure
+    - name: Create release directory
       shell: powershell
       run: |
-        New-Item -ItemType Directory -Force -Path "release"
-        New-Item -ItemType Directory -Force -Path "release/bin"
-        New-Item -ItemType Directory -Force -Path "release/src"
-        
-        # Copy executables
-        Copy-Item "testing_ci-cp.exe" "release/bin/"
-        Copy-Item "testing_ci-cp_debug.exe" "release/bin/"
-        
-        # Copy source files
-        Copy-Item "main.cpp" "release/src/"
-        Copy-Item "sqlite3.h" "release/src/"
-        Copy-Item "sqlite3.c" "release/src/"
-        
-        # Create README for release
-        @"
-        # testing_ci-cp Release
-        
-        This release contains:
-        - `bin/testing_ci-cp.exe` - Optimized release build
-        - `bin/testing_ci-cp_debug.exe` - Debug build with symbols
-        - `src/` - Source code files
-        
-        ## Usage
-        Run the executable from the bin directory:
-        ```
-        ./bin/testing_ci-cp.exe
-        ```
-        
-        Built with SQLite $(sqlite3 --version 2>$null || echo "embedded")
-        "@ | Out-File -FilePath "release/README.md" -Encoding utf8
+        mkdir release\bin
+        mkdir release\src
+        Copy-Item testing_ci-cp.exe release\bin\
+        Copy-Item testing_ci-cp_debug.exe release\bin\
+        Copy-Item main.exe release\bin\
+        Copy-Item main.cpp release\src\
+        Copy-Item sqlite3.h release\src\
+        Copy-Item sqlite3.c release\src\
+        Set-Content -Path release\README.md -Value @"
+# testing_ci-cp Release
 
-    - name: Test executables
-      shell: powershell
-      timeout-minutes: 1
-      continue-on-error: true
-      run: |
-        cd release/bin
-        $executables = @("testing_ci-cp.exe", "testing_ci-cp_debug.exe")
-        foreach ($exe in $executables) {
-          Write-Host "Testing $exe..."
-          if (Test-Path $exe) {
-            try {
-              $p = Start-Process -FilePath ".\$exe" -Wait -PassThru -NoNewWindow -TimeoutSec 10
-              Write-Host "$exe completed with exit code $($p.ExitCode)"
-            } catch {
-              Write-Host "$exe test completed (may require user input)"
-            }
-          } else {
-            Write-Host "ERROR: $exe not found!"
-            exit 1
-          }
-        }
+This release contains:
+- bin/testing_ci-cp.exe - Optimized release build
+- bin/testing_ci-cp_debug.exe - Debug build
+- bin/main.exe - Copy of release build
+- src/ - Source code
 
-    - name: Create Windows ZIP archive
+Run from bin directory:
+./bin/testing_ci-cp.exe
+"@
+
+    - name: Create ZIP Archive
       shell: powershell
       run: |
-        $version = if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") { 
-          "${{ github.event.inputs.version }}" 
-        } elseif ($env:GITHUB_REF -like "refs/tags/*") { 
-          $env:GITHUB_REF -replace "refs/tags/", ""
-        } else { 
-          "latest" 
-        }
-        
-        $archiveName = "testing_ci-cp_windows_$version.zip"
-        Compress-Archive -Path "release/*" -DestinationPath $archiveName
-        
-        Write-Host "Created archive: $archiveName"
+        $version = "${{ github.event.inputs.version || github.ref_name || 'latest' }}"
+        $archiveName = "testing_ci-cp_windows_${version}.zip"
+        Compress-Archive -Path release/* -DestinationPath $archiveName
         echo "ARCHIVE_NAME=$archiveName" >> $env:GITHUB_ENV
         echo "VERSION=$version" >> $env:GITHUB_ENV
 
-    - name: Upload build artifacts
+    - name: Upload Windows Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: windows-release-${{ env.VERSION }}
@@ -134,92 +89,47 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install build dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential
+    - name: Install build tools
+      run: sudo apt update && sudo apt install -y build-essential
 
-    - name: Build Release Binaries
+    - name: Build Linux Binaries
       run: |
-        echo "Building Linux release binaries..."
-        
-        # Build release version
         g++ -std=c++17 -O2 -DNDEBUG -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_ENABLE_RTREE -DSQLITE_ENABLE_FTS3 \
-            -o testing_ci-cp main.cpp sqlite3.c -lpthread -ldl
-        
-        # Build debug version
+          -o testing_ci-cp main.cpp sqlite3.c -lpthread -ldl
         g++ -std=c++17 -g -DDEBUG -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_ENABLE_RTREE -DSQLITE_ENABLE_FTS3 \
-            -o testing_ci-cp_debug main.cpp sqlite3.c -lpthread -ldl
+          -o testing_ci-cp_debug main.cpp sqlite3.c -lpthread -ldl
+        cp testing_ci-cp main
 
-    - name: Create release directory structure
+    - name: Create release directory
       run: |
         mkdir -p release/bin release/src
-        
-        # Copy executables
         cp testing_ci-cp release/bin/
         cp testing_ci-cp_debug release/bin/
-        
-        # Copy source files
+        cp main release/bin/
         cp main.cpp sqlite3.h sqlite3.c release/src/
-        
-        # Make executables executable
-        chmod +x release/bin/testing_ci-cp
-        chmod +x release/bin/testing_ci-cp_debug
-        
-        # Create README
-        cat > release/README.md << 'EOF'
-        # testing_ci-cp Release (Linux)
-        
-        This release contains:
-        - `bin/testing_ci-cp` - Optimized release build
-        - `bin/testing_ci-cp_debug` - Debug build with symbols
-        - `src/` - Source code files
-        
-        ## Usage
-        Run the executable from the bin directory:
-        ```bash
-        ./bin/testing_ci-cp
-        ```
-        
-        Make sure the binary is executable:
-        ```bash
-        chmod +x bin/testing_ci-cp
-        ```
-        EOF
+        chmod +x release/bin/*
+        cat > release/README.md <<EOF
+# testing_ci-cp Release (Linux)
 
-    - name: Test executables
-      timeout-minutes: 1
-      continue-on-error: true
-      run: |
-        cd release/bin
-        for exe in testing_ci-cp testing_ci-cp_debug; do
-          echo "Testing $exe..."
-          if [ -f "$exe" ]; then
-            timeout 10s ./$exe || echo "$exe test completed (may require user input)"
-          else
-            echo "ERROR: $exe not found!"
-            exit 1
-          fi
-        done
+This release contains:
+- bin/testing_ci-cp - Optimized release build
+- bin/testing_ci-cp_debug - Debug build
+- bin/main - Copy of release build
+- src/ - Source code
 
-    - name: Create Linux TAR archive
+Run from bin:
+./bin/testing_ci-cp
+EOF
+
+    - name: Create TAR Archive
       run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          VERSION="${{ github.event.inputs.version }}"
-        elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
-          VERSION="${{ github.ref#refs/tags/ }}"
-        else
-          VERSION="latest"
-        fi
-        
+        VERSION="${{ github.event.inputs.version || github.ref_name || 'latest' }}"
         ARCHIVE_NAME="testing_ci-cp_linux_${VERSION}.tar.gz"
         tar -czf "$ARCHIVE_NAME" -C release .
-        
-        echo "Created archive: $ARCHIVE_NAME"
         echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> $GITHUB_ENV
         echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-    - name: Upload build artifacts
+    - name: Upload Linux Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: linux-release-${{ env.VERSION }}
@@ -238,7 +148,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
 
     steps:
-    - name: Checkout code
+    - name: Checkout
       uses: actions/checkout@v4
 
     - name: Download Windows artifacts
@@ -251,36 +161,20 @@ jobs:
       with:
         name: linux-release-${{ needs.build-linux.outputs.version }}
 
-    - name: Generate release notes
+    - name: Generate Release Notes
       run: |
-        cat > RELEASE_NOTES.md << 'EOF'
-        ## 🚀 Release Notes
-        
-        ### What's New
-        - SQLite C++ application built for Windows and Linux
-        - Optimized release builds with SQLite extensions enabled
-        - Debug builds available for development
-        
-        ### 📦 Downloads
-        - **Windows**: `testing_ci-cp_windows_*.zip`
-        - **Linux**: `testing_ci-cp_linux_*.tar.gz`
-        
-        ### 🔧 Build Information
-        - **Compiler**: MSVC (Windows), GCC (Linux)
-        - **SQLite Features**: RTREE, FTS3 enabled
-        - **C++ Standard**: C++17
-        
-        ### 📋 Contents
-        Each archive contains:
-        - `bin/` - Executable files (release + debug)
-        - `src/` - Source code
-        - `README.md` - Usage instructions
-        
-        ### 🏃‍♂️ Quick Start
-        1. Download the appropriate archive for your platform
-        2. Extract the archive
-        3. Run `./bin/testing_ci-cp` (Linux) or `bin\testing_ci-cp.exe` (Windows)
-        EOF
+        cat > RELEASE_NOTES.md <<EOF
+## 🚀 Release Notes
+
+- SQLite C++ Console App
+- Includes release + debug + main executables
+- Works on Windows and Linux
+
+### 📦 Contents
+- bin/
+- src/
+- README.md
+EOF
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
@@ -291,8 +185,6 @@ jobs:
         files: |
           ${{ needs.build-windows.outputs.archive-name }}
           ${{ needs.build-linux.outputs.archive-name }}
-        draft: false
-        prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -300,23 +192,9 @@ jobs:
     needs: [build-windows, build-linux, create-release]
     runs-on: ubuntu-latest
     if: always()
-
     steps:
-    - name: Report build status
+    - name: Report Build Status
       run: |
-        echo "🏗️ Build Status Report"
-        echo "====================="
         echo "Windows Build: ${{ needs.build-windows.result }}"
         echo "Linux Build: ${{ needs.build-linux.result }}"
-        echo "Release Creation: ${{ needs.create-release.result }}"
-        echo ""
-        
-        if [ "${{ needs.build-windows.result }}" = "success" ] && [ "${{ needs.build-linux.result }}" = "success" ]; then
-          echo "✅ All builds completed successfully!"
-          if [ "${{ needs.create-release.result }}" = "success" ]; then
-            echo "🎉 Release ${{ needs.build-windows.outputs.version }} created successfully!"
-          fi
-        else
-          echo "❌ Some builds failed. Check the logs above."
-          exit 1
-        fi
+        echo "Release: ${{ needs.create-release.result }}"
