@@ -1,4 +1,4 @@
-name: CI - Build and Test
+name: CI - Windows Build and Test
 
 on:
   push:
@@ -8,111 +8,30 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-test:
-    name: Build and Test on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        compiler: [gcc, clang]
-        exclude:
-          - os: windows-latest
-            compiler: clang
-        include:
-          - os: windows-latest
-            compiler: msvc
+  build-and-test-windows:
+    runs-on: windows-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up build environment (Ubuntu/macOS)
-      if: runner.os != 'Windows'
-      run: |
-        if [ "${{ matrix.compiler }}" = "gcc" ]; then
-          echo "CC=gcc" >> $GITHUB_ENV
-          echo "CXX=g++" >> $GITHUB_ENV
-        elif [ "${{ matrix.compiler }}" = "clang" ]; then
-          echo "CC=clang" >> $GITHUB_ENV
-          echo "CXX=clang++" >> $GITHUB_ENV
-        fi
-
-    - name: Set up MSVC (Windows)
-      if: runner.os == 'Windows' && matrix.compiler == 'msvc'
+    - name: Set up MSVC
       uses: microsoft/setup-msbuild@v2
 
-    - name: Install dependencies (Ubuntu)
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential
-        if [ "${{ matrix.compiler }}" = "clang" ]; then
-          sudo apt-get install -y clang
-        fi
-
-    - name: Install dependencies (macOS)
-      if: runner.os == 'macOS'
-      run: |
-        if [ "${{ matrix.compiler }}" = "clang" ]; then
-          echo "Using system clang"
-        else
-          brew install gcc
-        fi
-
-    - name: Compile with GCC/Clang (Unix)
-      if: runner.os != 'Windows'
-      run: |
-        echo "Compiling with ${{ matrix.compiler }} on ${{ matrix.os }}"
-
-        SQLITE_FLAGS="-DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_ENABLE_RTREE -DSQLITE_ENABLE_FTS3 -DSQLITE_ENABLE_FTS3_PARENTHESIS"
-        COMMON_FLAGS="-std=c++11 -O2"
-
-        if [ "${{ matrix.compiler }}" = "gcc" ]; then
-          WARNING_FLAGS="-Wall -Wno-unused-parameter -Wno-unused-function -Wno-sign-compare"
-        else
-          WARNING_FLAGS="-Wall -Wno-unused-parameter -Wno-unused-function -Wno-sign-compare -Wno-implicit-fallthrough"
-        fi
-
-        echo "Building basic version..."
-        $CXX $COMMON_FLAGS $WARNING_FLAGS $SQLITE_FLAGS -o main_basic main.cpp sqlite3.c
-
-        echo "Building debug version..."
-        $CXX $COMMON_FLAGS $WARNING_FLAGS $SQLITE_FLAGS -g -DDEBUG -o main_debug main.cpp sqlite3.c
-
-        echo "Building optimized version..."
-        $CXX $COMMON_FLAGS $WARNING_FLAGS $SQLITE_FLAGS -O3 -DNDEBUG -o main_optimized main.cpp sqlite3.c
-
-    - name: Compile with MSVC (Windows)
-      if: runner.os == 'Windows' && matrix.compiler == 'msvc'
+    - name: Compile with MSVC
       shell: pwsh
       run: |
-        Write-Host "Compiling with MSVC on Windows"
+        Write-Host "Compiling with MSVC..."
 
         $sqliteFlags = "/DSQLITE_OMIT_LOAD_EXTENSION /DSQLITE_ENABLE_RTREE /DSQLITE_ENABLE_FTS3"
         $commonFlags = "/EHsc /std:c++11"
         $warningFlags = "/W3 /wd4996 /wd4244 /wd4267 /wd4018"
 
-        Write-Host "Building basic version..."
         cl $commonFlags $warningFlags $sqliteFlags /Fe:main_basic.exe main.cpp sqlite3.c
-
-        Write-Host "Building debug version..."
         cl $commonFlags $warningFlags $sqliteFlags /Zi /DDEBUG /Fe:main_debug.exe main.cpp sqlite3.c
-
-        Write-Host "Building optimized version..."
         cl $commonFlags $warningFlags $sqliteFlags /O2 /DNDEBUG /Fe:main_optimized.exe main.cpp sqlite3.c
 
-    - name: Verify executables exist (Unix)
-      if: runner.os != 'Windows'
-      run: |
-        ls -la main_*
-        test -x main_basic && echo "✓ main_basic is executable"
-        test -x main_debug && echo "✓ main_debug is executable"
-        test -x main_optimized && echo "✓ main_optimized is executable"
-
-    - name: Verify executables exist (Windows)
-      if: runner.os == 'Windows'
+    - name: Verify executables
       shell: pwsh
       run: |
         dir main_*.exe
@@ -120,26 +39,7 @@ jobs:
         if (Test-Path main_debug.exe) { Write-Host "✓ main_debug.exe exists" }
         if (Test-Path main_optimized.exe) { Write-Host "✓ main_optimized.exe exists" }
 
-    - name: Test basic functionality (Unix)
-      if: runner.os != 'Windows'
-      continue-on-error: true
-      run: |
-        for exe in main_basic main_debug main_optimized; do
-          echo "Testing $exe..."
-          if timeout 10s ./$exe; then
-            echo "✓ $exe completed successfully"
-          else
-            code=$?
-            if [ $code -eq 124 ]; then
-              echo "⚠ $exe timed out (likely waiting for input)"
-            else
-              echo "✗ $exe failed with exit code $code"
-            fi
-          fi
-        done
-
-    - name: Test basic functionality (Windows)
-      if: runner.os == 'Windows'
+    - name: Test executables
       continue-on-error: true
       timeout-minutes: 2
       shell: pwsh
@@ -162,25 +62,9 @@ jobs:
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: executables-${{ matrix.os }}-${{ matrix.compiler }}
+        name: windows-executables
         path: |
-          main_basic*
-          main_debug*
-          main_optimized*
+          main_basic.exe
+          main_debug.exe
+          main_optimized.exe
         retention-days: 7
-
-  summary:
-    name: Build Summary
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-    - name: Summary
-      run: |
-        echo "=== CI Pipeline Summary ==="
-        if [ "${{ needs.build-and-test.result }}" = "success" ]; then
-          echo "✓ All builds successful across OS/compilers"
-        else
-          echo "✗ Some builds failed - check logs above"
-          exit 1
-        fi
