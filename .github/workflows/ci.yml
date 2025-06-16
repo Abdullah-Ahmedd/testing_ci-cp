@@ -40,9 +40,9 @@ jobs:
       shell: powershell
       run: |
         dir main_*.exe
-        if (Test-Path main_basic.exe) { Write-Host "✓ main_basic.exe exists" }
-        if (Test-Path main_debug.exe) { Write-Host "✓ main_debug.exe exists" }
-        if (Test-Path main_optimized.exe) { Write-Host "✓ main_optimized.exe exists" }
+        if (Test-Path main_basic.exe) { Write-Host "main_basic.exe exists" }
+        if (Test-Path main_debug.exe) { Write-Host "main_debug.exe exists" }
+        if (Test-Path main_optimized.exe) { Write-Host "main_optimized.exe exists" }
 
     - name: Test executables
       shell: powershell
@@ -55,16 +55,16 @@ jobs:
           try {
             $p = Start-Process -FilePath ".\$exe" -Wait -PassThru -NoNewWindow
             if ($p.ExitCode -eq 0) {
-              Write-Host "✓ $exe ran successfully"
+              Write-Host "$exe ran successfully"
             } else {
-              Write-Host "✗ $exe failed with exit code $($p.ExitCode)"
+              Write-Host "$exe failed with exit code $($p.ExitCode)"
             }
           } catch {
-            Write-Host "⚠ $exe crashed or hung (expected if waiting for input)"
+            Write-Host "$exe crashed or hung (likely waiting for input)"
           }
         }
 
-    - name: Upload artifacts
+    - name: Upload executables
       uses: actions/upload-artifact@v4
       with:
         name: windows-executables
