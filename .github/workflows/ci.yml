@@ -1,25 +1,84 @@
-# .github/workflows/ci.yml
-name: C++ CI Build
+name: CI - Build and Test SQLite C++ Project
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, master ]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
+  build-and-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        
     steps:
-    - name: Checkout source code
-      uses: actions/checkout@v3
-
-    - name: Install build tools
-      run: sudo apt-get update && sudo apt-get install -y build-essential
-
-    - name: Compile main.cpp with sqlite3.c
-      run: g++ main.cpp sqlite3.c -o app
-
-    - name: Run the program
-      run: ./app
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup build environment (Ubuntu/macOS)
+      if: runner.os != 'Windows'
+      run: |
+        if [[ "$RUNNER_OS" == "Linux" ]]; then
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+        elif [[ "$RUNNER_OS" == "macOS" ]]; then
+          # Xcode command line tools should already be available
+          echo "Using macOS build tools"
+        fi
+        
+    - name: Setup build environment (Windows)
+      if: runner.os == 'Windows'
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        update: true
+        install: >-
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-make
+          
+    - name: Compile SQLite object file (Unix)
+      if: runner.os != 'Windows'
+      run: |
+        gcc -c sqlite3.c -o sqlite3.o -pthread
+        
+    - name: Compile main.cpp (Unix)
+      if: runner.os != 'Windows'
+      run: |
+        g++ -c main.cpp -o main.o -pthread
+        
+    - name: Link and create executable (Unix)
+      if: runner.os != 'Windows'
+      run: |
+        g++ -o main main.o sqlite3.o -pthread -ldl
+        
+    - name: Compile and link (Windows)
+      if: runner.os == 'Windows'
+      shell: msys2 {0}
+      run: |
+        gcc -c sqlite3.c -o sqlite3.o -pthread
+        g++ -c main.cpp -o main.o -pthread
+        g++ -o main.exe main.o sqlite3.o -pthread -ldl
+        
+    - name: Test executable (Unix)
+      if: runner.os != 'Windows'
+      run: |
+        ./main
+        
+    - name: Test executable (Windows)
+      if: runner.os == 'Windows'
+      shell: msys2 {0}
+      run: |
+        ./main.exe
+        
+    - name: Check if database file was created
+      run: |
+        if [[ -f "test.db" ]]; then
+          echo "✓ Database file created successfully"
+          ls -la test.db
+        else
+          echo "✗ Database file not found"
+          exit 1
+        fi
+      shell: bash
