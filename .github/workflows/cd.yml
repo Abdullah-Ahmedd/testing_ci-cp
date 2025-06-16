@@ -1,102 +1,44 @@
-name: CD - Windows Release
+name: CI/CD - Windows Build and Release
 
 on:
   push:
     tags:
-      - 'v*'
-  release:
-    types: [created]
+      - 'v*.*.*'  # Example: v1.0.0
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Release version (e.g., v1.0.0)'
-        required: true
-        default: 'v1.0.0'
 
 jobs:
   build-windows:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout repository
+    - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up MSVC
+    - name: Set up MSVC (Visual Studio Dev Command Prompt)
       uses: ilammy/msvc-dev-cmd@v1
 
-    - name: Build Windows executables
+    - name: Build executables
       shell: cmd
       run: |
-        set FLAGS=/EHsc /std:c++17 /W3 /wd4996 /wd4244 /wd4267 /wd4018
         set SQLITE_FLAGS=/DSQLITE_OMIT_LOAD_EXTENSION /DSQLITE_ENABLE_RTREE /DSQLITE_ENABLE_FTS3
+        set COMMON_FLAGS=/EHsc /std:c++17
+        set WARNING_FLAGS=/W3 /wd4996 /wd4244 /wd4267 /wd4018
 
-        echo Building main.exe...
-        cl %FLAGS% %SQLITE_FLAGS% /O2 /DNDEBUG /Fe:main.exe main.cpp sqlite3.c
+        echo Building main_basic.exe...
+        cl %COMMON_FLAGS% %WARNING_FLAGS% %SQLITE_FLAGS% /Fe:main_basic.exe main.cpp sqlite3.c
 
-        echo Building testing_ci-cp.exe...
-        cl %FLAGS% %SQLITE_FLAGS% /O2 /DNDEBUG /Fe:testing_ci-cp.exe main.cpp sqlite3.c
+        echo Building main_debug.exe...
+        cl %COMMON_FLAGS% %WARNING_FLAGS% %SQLITE_FLAGS% /Zi /DDEBUG /Fe:main_debug.exe main.cpp sqlite3.c
 
-        echo Building testing_ci-cp_debug.exe...
-        cl %FLAGS% %SQLITE_FLAGS% /Zi /DDEBUG /Fe:testing_ci-cp_debug.exe main.cpp sqlite3.c
+        echo Building main_optimized.exe...
+        cl %COMMON_FLAGS% %WARNING_FLAGS% %SQLITE_FLAGS% /O2 /DNDEBUG /Fe:main_optimized.exe main.cpp sqlite3.c
 
-    - name: Prepare release directory
-      shell: powershell
-      run: |
-        mkdir release\bin
-        mkdir release\src
-        Copy-Item main.exe,testing_ci-cp.exe,testing_ci-cp_debug.exe -Destination release\bin
-        Copy-Item main.cpp,sqlite3.c,sqlite3.h -Destination release\src
-
-    - name: Create ZIP archive
-      shell: powershell
-      run: |
-        $version = if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
-          "${{ github.event.inputs.version }}"
-        } elseif ($env:GITHUB_REF -like "refs/tags/*") {
-          $env:GITHUB_REF -replace "refs/tags/", ""
-        } else {
-          "latest"
-        }
-
-        $archiveName = "testing_ci-cp_windows_${version}.zip"
-        Compress-Archive -Path release/* -DestinationPath $archiveName
-
-        echo "ARCHIVE_NAME=$archiveName" >> $env:GITHUB_ENV
-        echo "VERSION=$version" >> $env:GITHUB_ENV
-
-    - name: Upload ZIP as Artifact
-      uses: actions/upload-artifact@v4
+    - name: Upload Release Artifacts
+      uses: softprops/action-gh-release@v1
       with:
-        name: windows-release-${{ env.VERSION }}
-        path: |
-          ${{ env.ARCHIVE_NAME }}
-          release/
-        retention-days: 30
-
-    - name: Create GitHub Release
-      if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
-      id: create_release
-      uses: actions/create-release@v1
-      with:
-        tag_name: ${{ env.VERSION }}
-        release_name: Release ${{ env.VERSION }}
-        body: |
-          ## Windows Release
-          - `main.exe`
-          - `testing_ci-cp.exe`
-          - `testing_ci-cp_debug.exe`
-          - Includes source files
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Upload ZIP to GitHub Release
-      uses: actions/upload-release-asset@v1
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ${{ env.ARCHIVE_NAME }}
-        asset_name: ${{ env.ARCHIVE_NAME }}
-        asset_content_type: application/zip
+        files: |
+          main_basic.exe
+          main_debug.exe
+          main_optimized.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
