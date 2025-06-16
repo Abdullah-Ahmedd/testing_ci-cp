@@ -1,4 +1,4 @@
-name: CD - Build and Release
+name: CD - Windows Release
 
 on:
   push:
@@ -18,13 +18,13 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout code
+    - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set up MSVC (Visual Studio Dev Command Prompt)
+    - name: Set up MSVC
       uses: ilammy/msvc-dev-cmd@v1
 
-    - name: Build Release Binaries
+    - name: Build Windows executables
       shell: cmd
       run: |
         set FLAGS=/EHsc /std:c++17 /W3 /wd4996 /wd4244 /wd4267 /wd4018
@@ -39,7 +39,7 @@ jobs:
         echo Building testing_ci-cp_debug.exe...
         cl %FLAGS% %SQLITE_FLAGS% /Zi /DDEBUG /Fe:testing_ci-cp_debug.exe main.cpp sqlite3.c
 
-    - name: Prepare Windows release files
+    - name: Prepare release directory
       shell: powershell
       run: |
         mkdir release\bin
@@ -47,7 +47,7 @@ jobs:
         Copy-Item main.exe,testing_ci-cp.exe,testing_ci-cp_debug.exe -Destination release\bin
         Copy-Item main.cpp,sqlite3.c,sqlite3.h -Destination release\src
 
-    - name: Create ZIP
+    - name: Create ZIP archive
       shell: powershell
       run: |
         $version = if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
@@ -64,7 +64,7 @@ jobs:
         echo "ARCHIVE_NAME=$archiveName" >> $env:GITHUB_ENV
         echo "VERSION=$version" >> $env:GITHUB_ENV
 
-    - name: Upload Artifact
+    - name: Upload ZIP as Artifact
       uses: actions/upload-artifact@v4
       with:
         name: windows-release-${{ env.VERSION }}
@@ -73,110 +73,30 @@ jobs:
           release/
         retention-days: 30
 
-    outputs:
-      archive-name: ${{ env.ARCHIVE_NAME }}
-      version: ${{ env.VERSION }}
-
-  build-linux:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Install dependencies
-      run: sudo apt-get install -y build-essential
-
-    - name: Build Linux binaries
-      run: |
-        g++ -std=c++17 -O2 -DNDEBUG -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_ENABLE_RTREE -DSQLITE_ENABLE_FTS3 -o testing_ci-cp main.cpp sqlite3.c -lpthread -ldl
-        g++ -std=c++17 -g -DDEBUG -DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_ENABLE_RTREE -DSQLITE_ENABLE_FTS3 -o testing_ci-cp_debug main.cpp sqlite3.c -lpthread -ldl
-
-    - name: Prepare Linux release
-      run: |
-        mkdir -p release/bin release/src
-        cp testing_ci-cp testing_ci-cp_debug release/bin
-        cp main.cpp sqlite3.c sqlite3.h release/src
-
-    - name: Create TAR.GZ
-      run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          VERSION="${{ github.event.inputs.version }}"
-        elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
-          VERSION="${{ github.ref#refs/tags/ }}"
-        else
-          VERSION="latest"
-        fi
-
-        ARCHIVE_NAME="testing_ci-cp_linux_${VERSION}.tar.gz"
-        tar -czf "$ARCHIVE_NAME" -C release .
-
-        echo "ARCHIVE_NAME=$ARCHIVE_NAME" >> $GITHUB_ENV
-        echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: linux-release-${{ env.VERSION }}
-        path: |
-          ${{ env.ARCHIVE_NAME }}
-          release/
-        retention-days: 30
-
-    outputs:
-      archive-name: ${{ env.ARCHIVE_NAME }}
-      version: ${{ env.VERSION }}
-
-  create-release:
-    needs: [build-windows, build-linux]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
-
-    steps:
-    - name: Download Windows artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: windows-release-${{ needs.build-windows.outputs.version }}
-
-    - name: Download Linux artifacts
-      uses: actions/download-artifact@v4
-      with:
-        name: linux-release-${{ needs.build-linux.outputs.version }}
-
-    - name: Generate Release Notes
-      run: |
-        echo "## Release Notes" > RELEASE_NOTES.md
-        echo "- Built for Windows and Linux" >> RELEASE_NOTES.md
-        echo "- Includes: main.exe, release and debug builds" >> RELEASE_NOTES.md
-
     - name: Create GitHub Release
+      if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
       id: create_release
       uses: actions/create-release@v1
       with:
-        tag_name: ${{ needs.build-windows.outputs.version }}
-        release_name: Release ${{ needs.build-windows.outputs.version }}
-        body_path: RELEASE_NOTES.md
+        tag_name: ${{ env.VERSION }}
+        release_name: Release ${{ env.VERSION }}
+        body: |
+          ## Windows Release
+          - `main.exe`
+          - `testing_ci-cp.exe`
+          - `testing_ci-cp_debug.exe`
+          - Includes source files
         draft: false
         prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Upload Windows ZIP
+    - name: Upload ZIP to GitHub Release
       uses: actions/upload-release-asset@v1
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ${{ needs.build-windows.outputs.archive-name }}
-        asset_name: ${{ needs.build-windows.outputs.archive-name }}
+        asset_path: ${{ env.ARCHIVE_NAME }}
+        asset_name: ${{ env.ARCHIVE_NAME }}
         asset_content_type: application/zip
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Upload Linux TAR.GZ
-      uses: actions/upload-release-asset@v1
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ${{ needs.build-linux.outputs.archive-name }}
-        asset_name: ${{ needs.build-linux.outputs.archive-name }}
-        asset_content_type: application/gzip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
