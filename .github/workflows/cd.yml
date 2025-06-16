@@ -1,0 +1,28 @@
+name: CD - Deploy Windows Binary to Release
+
+on:
+  release:
+    types: [ published ]
+
+jobs:
+  deploy:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up MSVC
+      uses: ilammy/msvc-dev-cmd@v1
+
+    - name: Build executable
+      shell: cmd
+      run: |
+        cl /EHsc /std:c++17 /W3 /Fe:main.exe main.cpp sqlite3.c
+
+    - name: Upload to GitHub Releases
+      uses: softprops/action-gh-release@v2
+      with:
+        files: main.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
