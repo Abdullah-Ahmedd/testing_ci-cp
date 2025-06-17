@@ -22,18 +22,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEFAULT_BRANCH: main
 
-          # ✅ Only enable needed linters
-          VALIDATE_ALL_CODEBASE: false
           VALIDATE_CPP: true
           VALIDATE_CPPCHECK: true
           VALIDATE_CLANG_FORMAT: true
 
-          # ✅ Exclude vendor files (optional)
+          VALIDATE_ALL_CODEBASE: true   # ✅ Check all files
           FILTER_REGEX_EXCLUDE: 'sqlite3\.(c|h)'
 
-          # ✅ File types to consider
-          CPP_FILE_EXTENSIONS: '.cpp,.hpp,.cc,.hh,.cxx,.hxx'
+          CPP_FILE_EXTENSIONS: '.cpp,.cc,.cxx,.hpp,.hh,.hxx'
 
-          # ✅ Logging preferences
-          LOG_LEVEL: INFO
+          LOG_LEVEL: DEBUG
           CREATE_LOG_FILE: true
