@@ -1,4 +1,4 @@
-name: Super-Linter for C++
+name: Super-Linter - Style Only (No Compile)
 
 on:
   push:
@@ -7,34 +7,35 @@ on:
     branches: [ main ]
 
 jobs:
-  super-lint:
+  lint:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 3
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Super-Linter (C++ only)
+      - name: Run Super-Linter for C++ Style (No Compile/Syntax)
         uses: github/super-linter/slim@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEFAULT_BRANCH: main
-          VALIDATE_ALL_CODEBASE: false         # ✅ Only changed files (faster)
-          VALIDATE_CPP: true                   # ✅ Enable cpplint
-          VALIDATE_CLANG_FORMAT: true          # ✅ Enable clang-format
-          VALIDATE_CPPCHECK: true              # ✅ Enable cppcheck
-          DISABLE_ERRORS: false                # ⛔ Fail build on lint errors
-          
-          # 🔻 Disable all other linters
-          VALIDATE_BASH: false
-          VALIDATE_JAVASCRIPT_ES: false
-          VALIDATE_TYPESCRIPT_ES: false
+          VALIDATE_ALL_CODEBASE: false         # Only changed files
+
+          # ✅ Enable only style and static checks
+          VALIDATE_CPPCHECK: true              # Static analysis (lightweight, not a compiler)
+          VALIDATE_CLANG_FORMAT: true          # Style formatting (no syntax check)
+          VALIDATE_CPP: true                   # cpplint - Google C++ Style
+
+          # ❌ Disable anything related to syntax/build or unrelated languages
+          VALIDATE_CSS: false
           VALIDATE_MARKDOWN: false
+          VALIDATE_BASH: false
           VALIDATE_PYTHON: false
           VALIDATE_JSON: false
           VALIDATE_YAML: false
           VALIDATE_XML: false
-          VALIDATE_GITHUB_ACTIONS: false
           VALIDATE_DOCKERFILE_HADOLINT: false
+          VALIDATE_GITHUB_ACTIONS: false
           VALIDATE_ENV: false
+          DISABLE_ERRORS: false
