@@ -1,4 +1,4 @@
-name: Super-Linter - Style Only (No Compile)
+name: Fast Native Lint for C++
 
 on:
   push:
@@ -9,18 +9,26 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 2
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Super-Linter for C++ Style (No Compile/Syntax)
-        uses: github/super-linter/slim@v6
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEFAULT_BRANCH: main
-          VALIDATE_CPP: true
-          VALIDATE_CPPCHECK: true
-          VALIDATE_CLANG_FORMAT: true
-          VALIDATE_ALL_CODEBASE: false
+      - name: Install linters
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format cppcheck python3-pip
+          pip install cpplint
+
+      - name: Run clang-format (style check)
+        run: |
+          clang-format --dry-run --Werror main.cpp sqlite3.c sqlite3.h
+
+      - name: Run cppcheck (static analysis)
+        run: |
+          cppcheck --enable=all --inconclusive --quiet main.cpp sqlite3.c
+
+      - name: Run cpplint (Google style)
+        run: |
+          cpplint main.cpp sqlite3.c
