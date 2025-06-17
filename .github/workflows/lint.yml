@@ -20,22 +20,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEFAULT_BRANCH: main
-          VALIDATE_ALL_CODEBASE: false         # Only changed files
-
-          # ✅ Enable only style and static checks
-          VALIDATE_CPPCHECK: true              # Static analysis (lightweight, not a compiler)
-          VALIDATE_CLANG_FORMAT: true          # Style formatting (no syntax check)
-          VALIDATE_CPP: true                   # cpplint - Google C++ Style
-
-          # ❌ Disable anything related to syntax/build or unrelated languages
-          VALIDATE_CSS: false
-          VALIDATE_MARKDOWN: false
-          VALIDATE_BASH: false
-          VALIDATE_PYTHON: false
-          VALIDATE_JSON: false
-          VALIDATE_YAML: false
-          VALIDATE_XML: false
-          VALIDATE_DOCKERFILE_HADOLINT: false
-          VALIDATE_GITHUB_ACTIONS: false
-          VALIDATE_ENV: false
-          DISABLE_ERRORS: false
+          VALIDATE_CPP: true
+          VALIDATE_CPPCHECK: true
+          VALIDATE_CLANG_FORMAT: true
+          VALIDATE_ALL_CODEBASE: false
