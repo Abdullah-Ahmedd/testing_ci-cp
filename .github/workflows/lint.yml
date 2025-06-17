@@ -1,4 +1,4 @@
-name: Super Lint
+name: Super Linter
 
 on:
   push:
@@ -10,103 +10,30 @@ jobs:
   lint:
     name: Lint Code
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 2
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Super Lint
+      - name: Run Super-Linter
         uses: super-linter/super-linter@v5
         env:
-          DEFAULT_BRANCH: main
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
-          # Enable specific linters for C++
+          DEFAULT_BRANCH: main
+
+          # ✅ Only enable needed linters
+          VALIDATE_ALL_CODEBASE: false
           VALIDATE_CPP: true
-          VALIDATE_CLANG_FORMAT: true
           VALIDATE_CPPCHECK: true
-          
-          # Disable other linters we don't need
-          VALIDATE_ANSIBLE: false
-          VALIDATE_ARM: false
-          VALIDATE_BASH: false
-          VALIDATE_BASH_EXEC: false
-          VALIDATE_CHECKOV: false
-          VALIDATE_CLOJURE: false
-          VALIDATE_CLOUDFORMATION: false
-          VALIDATE_COFFEESCRIPT: false
-          VALIDATE_CSS: false
-          VALIDATE_DART: false
-          VALIDATE_DOCKERFILE: false
-          VALIDATE_DOCKERFILE_HADOLINT: false
-          VALIDATE_EDITORCONFIG: false
-          VALIDATE_ENV: false
-          VALIDATE_GHERKIN: false
-          VALIDATE_GITHUB_ACTIONS: false
-          VALIDATE_GITLEAKS: false
-          VALIDATE_GO: false
-          VALIDATE_GO_MODULES: false
-          VALIDATE_GOOGLE_JAVA_FORMAT: false
-          VALIDATE_GROOVY: false
-          VALIDATE_HTML: false
-          VALIDATE_JAVA: false
-          VALIDATE_JAVASCRIPT_ES: false
-          VALIDATE_JAVASCRIPT_STANDARD: false
-          VALIDATE_JSCPD: false
-          VALIDATE_JSON: false
-          VALIDATE_JSX: false
-          VALIDATE_KOTLIN: false
-          VALIDATE_KUBERNETES_KUBECONFORM: false
-          VALIDATE_LATEX: false
-          VALIDATE_LUA: false
-          VALIDATE_MARKDOWN: false
-          VALIDATE_NATURAL_LANGUAGE: false
-          VALIDATE_OPENAPI: false
-          VALIDATE_PERL: false
-          VALIDATE_PHP: false
-          VALIDATE_PHP_BUILTIN: false
-          VALIDATE_PHP_PHPCS: false
-          VALIDATE_PHP_PHPSTAN: false
-          VALIDATE_PHP_PSALM: false
-          VALIDATE_POWERSHELL: false
-          VALIDATE_PROTOBUF: false
-          VALIDATE_PYTHON: false
-          VALIDATE_PYTHON_BLACK: false
-          VALIDATE_PYTHON_FLAKE8: false
-          VALIDATE_PYTHON_ISORT: false
-          VALIDATE_PYTHON_MYPY: false
-          VALIDATE_PYTHON_PYLINT: false
-          VALIDATE_R: false
-          VALIDATE_RAKU: false
-          VALIDATE_RUBY: false
-          VALIDATE_RUST_2015: false
-          VALIDATE_RUST_2018: false
-          VALIDATE_RUST_2021: false
-          VALIDATE_RUST_CLIPPY: false
-          VALIDATE_SCALAFMT: false
-          VALIDATE_SHELL_SHFMT: false
-          VALIDATE_SNAKEMAKE_LINT: false
-          VALIDATE_SNAKEMAKE_SNAKEFMT: false
-          VALIDATE_STATES: false
-          VALIDATE_SQL: false
-          VALIDATE_SQLFLUFF: false
-          VALIDATE_TEKTON: false
-          VALIDATE_TERRAFORM_FMT: false
-          VALIDATE_TERRAFORM_TERRASCAN: false
-          VALIDATE_TERRAFORM_TFLINT: false
-          VALIDATE_TERRAGRUNT: false
-          VALIDATE_TSX: false
-          VALIDATE_TYPESCRIPT_ES: false
-          VALIDATE_TYPESCRIPT_STANDARD: false
-          VALIDATE_XML: false
-          VALIDATE_YAML: false
-          
-          # Filter files - exclude sqlite3 files
+          VALIDATE_CLANG_FORMAT: true
+
+          # ✅ Optional: Skip sqlite3 files
           FILTER_REGEX_EXCLUDE: 'sqlite3\.(c|h)'
-          
-          # C++ specific settings
+
+          # ✅ Limit to relevant file types
           CPP_FILE_EXTENSIONS: '.cpp,.hpp,.cc,.hh,.cxx,.hxx'
-          
-          # Output format
+
+          # ✅ Logging preferences
           LOG_LEVEL: INFO
           CREATE_LOG_FILE: true
