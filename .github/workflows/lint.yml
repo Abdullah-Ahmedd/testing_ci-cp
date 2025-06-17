@@ -8,7 +8,7 @@ on:
 
 jobs:
   lint:
-    name: Lint Code
+    name: Lint C++ Code
     runs-on: ubuntu-latest
     timeout-minutes: 2
 
@@ -28,10 +28,10 @@ jobs:
           VALIDATE_CPPCHECK: true
           VALIDATE_CLANG_FORMAT: true
 
-          # ✅ Optional: Skip sqlite3 files
+          # ✅ Exclude vendor files (optional)
           FILTER_REGEX_EXCLUDE: 'sqlite3\.(c|h)'
 
-          # ✅ Limit to relevant file types
+          # ✅ File types to consider
           CPP_FILE_EXTENSIONS: '.cpp,.hpp,.cc,.hh,.cxx,.hxx'
 
           # ✅ Logging preferences
